@@ -1,9 +1,13 @@
+#include <Arduino.h>
 #include <WiFi.h>
 #include "esp_camera.h"
 #include <vector>
 #include <WebSocketsClient.h>
 #include <driver/i2s.h>
 #include <ESP32Servo.h>
+#include <Wire.h>
+
+#include <MPU6050_6Axis_MotionApps20.h>
 
 const char *ssid = "CloudFan";              // wifi用户名
 const char *password = "23333333";          // wifi密码
@@ -14,6 +18,7 @@ uint16_t serverPort = 80;                   // 服务器端口号(tcp协议)
 
 #define DATA_TYPE_VIDEO 0x01
 #define DATA_TYPE_BATTERY 0x02
+#define DATA_TYPE_IMU 0x03
 struct DataPacket
 {
     uint8_t dataType;
@@ -86,6 +91,24 @@ static camera_config_t camera_config = {
 Servo servoH; // 水平舵机对象
 Servo servoV; // 垂直舵机对象
 
+//定义I2C引脚
+#define I2C_SDA 14
+#define I2C_SCL 15
+#define INPUT_PIN 2 // 接到MPU6050的INT引脚
+//定义MPU6050
+MPU6050 mpu(0x68); // 定义MPU6050对象，连接到地址为0x68的I2C总线
+
+// MPU6050中断引脚和标志
+volatile bool mpuInterrupt = false;
+void dmpDataReady() {
+    mpuInterrupt = true;
+}
+#define FIFO_BUFFER_SIZE 64 // 根据需要设置合适的大小
+uint8_t fifoBuffer[FIFO_BUFFER_SIZE];
+// IMU数据变量
+int16_t ax, ay, az;
+int16_t gx, gy, gz;
+
 // 初始化舵机
 void servo_init() {
     servoH.attach(SERVO_PIN_H);
@@ -157,6 +180,7 @@ void processControlCommand(const char* payload) {
     }
 }
 
+
 // WebSocket事件处理
 void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
     switch(type) {
@@ -200,6 +224,28 @@ void setup() {
     // 舵机初始化
     servo_init();
 
+    //IMU初始化
+    Wire.begin(I2C_SDA, I2C_SCL); // 连接I2C总线
+    Wire.setClock(100000);
+    mpu.initialize(); // 初始化MPU6050
+    pinMode(INPUT_PIN, INPUT); // MPU6050 INT引脚连接到ESP32的GPIO 2
+    attachInterrupt(digitalPinToInterrupt(2), dmpDataReady, RISING);
+    if (!mpu.testConnection()) {
+        Serial.println("MPU6050 connection failed");
+    } else {
+        Serial.println("MPU6050 connected");
+    }
+     // 初始化DMP
+    uint8_t devStatus = mpu.dmpInitialize();
+    if (devStatus == 0) {
+        mpu.setDMPEnabled(true);
+        Serial.println("DMP Initialized and Enabled");
+    } else {
+        Serial.print("DMP Initialization failed (code ");
+        Serial.print(devStatus);
+        Serial.println(")");
+    }
+
     // 不在setup中初始化摄像头，等待wake信号来初始化
     // camera_init();
     webSocket.begin("49.233.216.82", 5901, "/esp32");
@@ -217,20 +263,53 @@ void loop() {
         // sprintf(batteryMessage, "battery:%.2fV", batteryLevel);
         
         // webSocket.sendTXT(batteryMessage);
+
+        // 检查DMP数据准备状态
+        if (mpuInterrupt) {
+            mpuInterrupt = false;
+
+            // 获取DMP数据包
+            if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) {
+                Quaternion q;           // 四元数容器
+                VectorFloat gravity;    // 重力容器
+                float ypr[3];           // yaw/pitch/roll 容器
+
+                // 从FIFO中提取四元数
+                mpu.dmpGetQuaternion(&q, fifoBuffer);
+                mpu.dmpGetGravity(&gravity, &q);
+                mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
+
+                // 格式化姿态数据
+                DataPacket* imuPacket = new DataPacket;
+                imuPacket->dataType = DATA_TYPE_IMU;
+                String imuData = String(ypr[0] * 180 / M_PI) + "," +
+                                 String(ypr[1] * 180 / M_PI) + "," +
+                                 String(ypr[2] * 180 / M_PI);
+                imuPacket->data.assign(imuData.begin(), imuData.end());
+                std::vector<uint8_t> sendIMUData;
+
+                sendIMUData.push_back(imuPacket->dataType);
+                sendIMUData.insert(sendIMUData.end(), imuPacket->data.begin(), imuPacket->data.end());
+                webSocket.sendBIN(sendIMUData.data(), sendIMUData.size());
+                delete imuPacket;
+            }
+        }
+
        
 
         // 获取摄像头帧并上传
         camera_fb_t *fb = esp_camera_fb_get();
         if (fb) {
-            DataPacket pkt;
+            DataPacket* pkt = new DataPacket();
             
-            pkt.dataType = DATA_TYPE_VIDEO;
-            pkt.data.resize(fb->len);
-            memcpy(pkt.data.data(), fb->buf, fb->len);
+            pkt->dataType = DATA_TYPE_VIDEO;
+            pkt->data.resize(fb->len);
+            memcpy(pkt->data.data(), fb->buf, fb->len);
             std::vector<uint8_t> sendData;
-            sendData.push_back(pkt.dataType);
-            sendData.insert(sendData.end(), pkt.data.begin(), pkt.data.end());
+            sendData.push_back(pkt->dataType);
+            sendData.insert(sendData.end(), pkt->data.begin(), pkt->data.end());
             webSocket.sendBIN(sendData.data(), sendData.size());
+            delete pkt;
             esp_camera_fb_return(fb);
         }
     }
