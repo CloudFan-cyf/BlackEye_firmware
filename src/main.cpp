@@ -42,8 +42,7 @@ WebSocketsClient webSocket; // 声明一个客户端对象，用于与服务器�
 #define PCLK_GPIO_NUM     22
 
 #define BATTERY_PIN       33 // 假设电池电量检测连接到 GPIO 33 (ADC)
-#define SERVO1_PIN        14 // 舵机1连接到 GPIO 14
-#define SERVO2_PIN        15 // 舵机2连接到 GPIO 15
+
 
 static camera_config_t camera_config = {
     .pin_pwdn = PWDN_GPIO_NUM,
@@ -141,16 +140,17 @@ void processControlCommand(const char* payload) {
     float h_angle, v_angle;
     // 解析控制信号中的角度
     if (sscanf(payload, "H:%f V:%f", &h_percent, &v_percent) == 2) {
+        Serial.printf("Received control command: H:%f, V:%f\n", h_percent, v_percent);
         // 控制舵机转动
-        h_angle = map(h_percent, 0, 100, -90, 90); // 映射到舵机控制范围
-        v_angle = map(v_percent, 0, 100, -90, 90); // 映射到舵机控制范围
+        h_angle = h_percent*180/100-90; // 映射到舵机控制范围
+        v_angle = v_percent*180/100-90; // 映射到舵机控制范围
         if (h_angle >= -90 && h_angle <= 90) {
             servoH.write(h_angle + 90); // 将角度转换为舵机控制信号
         }
         if (v_angle >= -90 && v_angle <= 90) {
             servoV.write(v_angle + 90); // 将角度转换为舵机控制信号
         }
-        Serial.printf("Controlled to H: %d, V: %d\n", h_angle, v_angle);
+        Serial.printf("Controlled to H: %f, V: %f\n", h_angle, v_angle);
     }
     else {
         Serial.printf("Invalid control command: %s\n", payload);
