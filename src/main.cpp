@@ -239,6 +239,7 @@ void setup() {
     uint8_t devStatus = mpu.dmpInitialize();
     if (devStatus == 0) {
         mpu.setDMPEnabled(true);
+        mpu.dmpGetCurrentFIFOPacket(fifoBuffer);
         Serial.println("DMP Initialized and Enabled");
     } else {
         Serial.print("DMP Initialization failed (code ");
