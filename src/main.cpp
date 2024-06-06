@@ -76,7 +76,7 @@ static camera_config_t camera_config = {
     .pixel_format = PIXFORMAT_JPEG,
     .frame_size = FRAMESIZE_VGA,
 
-    .jpeg_quality = 10,
+    .jpeg_quality = 20,
     .fb_count = 1,
 
     .fb_location = CAMERA_FB_IN_PSRAM,
@@ -219,6 +219,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
 void setup() {
     Serial.begin(9600);
     Serial.println("Starting Camera Client!");
+    setCpuFrequencyMhz(240);
     wifi_init();
     
     // 舵机初始化
