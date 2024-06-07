@@ -9,10 +9,10 @@
 
 #include <MPU6050_6Axis_MotionApps20.h>
 
-const char *ssid = "CloudFan";              // wifi用户名
-const char *password = "23333333";          // wifi密码
-const IPAddress serverIP(49, 233, 216, 82); // 你自己的公网服务器ip地址
-uint16_t serverPort = 80;                   // 服务器端口号(tcp协议)
+const char *ssid = "";              // wifi用户名
+const char *password = "";          // wifi密码
+const IPAddress serverIP(xx, xxx, xxx, xx); // 你自己的公网服务器ip地址
+uint16_t serverPort = xx;                   // 服务器端口号(tcp协议)
 
 #define maxcache 1430
 
