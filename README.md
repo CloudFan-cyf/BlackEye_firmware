@@ -13,7 +13,7 @@ const char *password = "";          // wifi密码
 const IPAddress serverIP(xx, xxx, xxx, xx); // 你自己的公网服务器ip地址
 uint16_t serverPort = xx;                   // 服务器端口号(tcp协议)
 ```
-根据你自己的情况进行修改。确保你有一个公网Ubuntu服务器可用运行BlackEye的Nodejs服务端代码。<br>
+根据你自己的情况进行修改。确保你有一个公网服务器可用运行BlackEye的Nodejs服务端代码。<br>
 外设模块的连接请参考`/src/main.cpp`中的定义接口部分：<br>
 ```
 //定义舵机引脚
